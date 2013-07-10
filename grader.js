@@ -27,6 +27,9 @@ var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
+var rest = require('restler');
+var TEMP_FILE_DEFAULT = "temp.html";
+
 var assertFileExists = function(infile) {
     var instr = infile.toString();
     if(!fs.existsSync(instr)) {
@@ -61,14 +64,39 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var buildfn = function(tempfile, checks) {
+    var response2file = function(result, response) {
+        if (result instanceof Error) {
+            console.error('Error: ' + util.format(response.message));
+        } else {
+            console.error("Wrote %s", tempfile);
+            console.error("Checks %s", checks);
+            fs.writeFileSync(tempfile, result);
+            var checkjson = checkHtmlFile(tempfile, checks);
+            var outjson = JSON.stringify(checkjson, null, 4);
+            console.log(outjson);
+        }
+    };
+    return response2file;
+};
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        //.option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists))
+        .option('-u, --url <url_link>', 'URL link to a website')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+
+    if (typeof(program.url) !== 'undefined') {
+      console.log("link: "+program.url);
+      var response2file = buildfn(TEMP_FILE_DEFAULT, program.checks);
+      rest.get(program.url).on('complete', response2file);
+    } else {   
+      var checkJson = checkHtmlFile(program.file, program.checks);
+      var outJson = JSON.stringify(checkJson, null, 4);
+      console.log(outJson);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
